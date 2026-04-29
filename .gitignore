@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Build outputs
+dist/
+release/
+*.exe
+*.msi
+*.dmg
+*.app
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+*.log
+
+# Tauri
+src-tauri/target/
+src-tauri/src-tauri
+
+# Electron
+electron/node_modules/
+electron/dist/
+electron/release/
+
+# Temp
+tmp/
+temp/
+*.tmp

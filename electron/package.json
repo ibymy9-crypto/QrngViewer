@@ -1,0 +1,50 @@
+{
+  "name": "qrng-viewer",
+  "version": "1.0.0",
+  "description": "跨平台随机数发生器上位机",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "electron:dev": "electron .",
+    "electron:build": "electron-builder --win --publish never"
+  },
+  "dependencies": {
+    "chart.js": "^4.4.1"
+  },
+  "devDependencies": {
+    "electron": "^28.1.0",
+    "electron-builder": "^24.9.1",
+    "vite": "^5.0.10"
+  },
+  "build": {
+    "appId": "com.qrngviewer.app",
+    "productName": "QRngViewer",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "public/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "public/icon.ico",
+      "uninstallerIcon": "public/icon.ico",
+      "installerHeaderIcon": "public/icon.ico",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "QRngViewer"
+    }
+  }
+}

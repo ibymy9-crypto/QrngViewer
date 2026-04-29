@@ -1,0 +1,648 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QRngViewer - 随机数发生器上位机 (Web版)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap');
+    body { font-family: 'JetBrains Mono', monospace; }
+    .bit-1 { background: #3B82F6; }
+    .bit-0 { background: #E5E7EB; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .receiving { animation: pulse 1s infinite; }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+  <!-- 顶部导航 -->
+  <header class="bg-white shadow-md sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 py-4">
+      <div class="flex items-center justify-between">
+        <h1 class="text-2xl font-bold text-gray-800">🎲 QRngViewer</h1>
+        <div class="flex items-center gap-4">
+          <span id="connectionStatus" class="px-3 py-1 rounded-full text-sm bg-gray-200">○ 未连接</span>
+          <span class="text-sm text-gray-600">数据: <span id="dataCount">0</span> 条</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- 标签页 -->
+  <nav class="bg-white border-b">
+    <div class="max-w-7xl mx-auto px-4">
+      <div class="flex gap-1" id="tabs">
+        <button onclick="switchTab('dashboard')" class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-blue-600 text-blue-600" data-tab="dashboard">📊 仪表盘</button>
+        <button onclick="switchTab('data')" class="tab-btn px-4 py-3 text-sm font-medium text-gray-600 hover:text-gray-900" data-tab="data">📋 数据</button>
+        <button onclick="switchTab('statistics')" class="tab-btn px-4 py-3 text-sm font-medium text-gray-600 hover:text-gray-900" data-tab="statistics">📈 统计</button>
+        <button onclick="switchTab('settings')" class="tab-btn px-4 py-3 text-sm font-medium text-gray-600 hover:text-gray-900" data-tab="settings">⚙️ 设置</button>
+        <button onclick="switchTab('export')" class="tab-btn px-4 py-3 text-sm font-medium text-gray-600 hover:text-gray-900" data-tab="export">💾 导出</button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- 主内容区 -->
+  <main class="max-w-7xl mx-auto px-4 py-6 pb-20">
+
+    <!-- 仪表盘 -->
+    <div id="panel-dashboard" class="panel">
+      <!-- 连接控制 -->
+      <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+        <h2 class="text-lg font-semibold mb-4">🔌 连接控制</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label class="block text-sm font-medium mb-2">串口</label>
+            <select id="portSelect" class="w-full px-3 py-2 border rounded-lg">
+              <option value="SIMULATE">🔄 模拟模式 (推荐)</option>
+              <option value="COM1">COM1 (Windows)</option>
+              <option value="/dev/ttyUSB0">/dev/ttyUSB0 (Linux)</option>
+              <option value="/dev/cu.usbserial">/dev/cu.usbserial (macOS)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-2">波特率</label>
+            <select id="baudRate" class="w-full px-3 py-2 border rounded-lg">
+              <option value="9600">9600</option>
+              <option value="115200" selected>115200 (推荐)</option>
+              <option value="230400">230400</option>
+              <option value="921600">921600</option>
+            </select>
+          </div>
+          <div class="flex items-end gap-2">
+            <button id="connectBtn" onclick="toggleConnect()" class="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">🔗 连接</button>
+          </div>
+        </div>
+        <div class="mt-4 flex gap-2 flex-wrap">
+          <button id="startBtn" onclick="toggleReceive()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700" disabled>▶️ 开始接收</button>
+          <div class="flex items-center gap-2 ml-4">
+            <label class="text-sm font-medium text-gray-700">指定字节数:</label>
+            <input type="number" id="targetBytes" min="1" max="10000" value="100" class="w-24 px-3 py-2 border rounded-lg text-center" placeholder="数量">
+            <button id="fixedBtn" onclick="generateFixedBytes()" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700" disabled>🎯 指定输出</button>
+            <span id="fixedProgress" class="text-sm text-gray-500 hidden">已生成: <span id="fixedCount">0</span>/<span id="fixedTarget">0</span> 字节</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 实时数据卡片 -->
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white rounded-lg shadow-md p-6">
+          <div class="text-sm text-gray-500 mb-2">最新值</div>
+          <div id="latestValue" class="text-3xl font-bold text-blue-600">--</div>
+          <div id="latestHex" class="text-sm text-gray-500 mt-1">HEX: --</div>
+        </div>
+        <div class="bg-white rounded-lg shadow-md p-6">
+          <div class="text-sm text-gray-500 mb-2">二进制</div>
+          <div id="latestBinary" class="text-lg text-green-600 break-all">--------</div>
+        </div>
+        <div class="bg-white rounded-lg shadow-md p-6">
+          <div class="text-sm text-gray-500 mb-2">熵值</div>
+          <div id="entropyValue" class="text-3xl font-bold text-purple-600">0%</div>
+          <div id="entropyStatus" class="text-sm text-gray-500 mt-1">等待数据</div>
+        </div>
+        <div class="bg-white rounded-lg shadow-md p-6">
+          <div class="text-sm text-gray-500 mb-2">数据量</div>
+          <div id="byteCount" class="text-3xl font-bold text-orange-600">0</div>
+          <div class="text-sm text-gray-500 mt-1">字节</div>
+        </div>
+      </div>
+
+      <!-- 波形图 -->
+      <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+        <h3 class="text-lg font-semibold mb-4">📈 实时波形</h3>
+        <div class="h-64">
+          <canvas id="waveChart"></canvas>
+        </div>
+      </div>
+
+      <!-- 位视图 -->
+      <div class="bg-white rounded-lg shadow-md p-6">
+        <h3 class="text-lg font-semibold mb-4">🔲 位视图 (最新32字节)</h3>
+        <div id="bitView" class="grid grid-cols-8 gap-1"></div>
+        <div class="mt-2 flex items-center gap-4 text-sm text-gray-500">
+          <span class="flex items-center gap-1"><div class="w-3 h-3 bg-blue-500 rounded-sm"></div> 1 位</span>
+          <span class="flex items-center gap-1"><div class="w-3 h-3 bg-gray-200 rounded-sm"></div> 0 位</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 数据面板 -->
+    <div id="panel-data" class="panel hidden">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-lg font-semibold">📋 数据列表 (最新100条)</h2>
+        <button onclick="clearData()" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">🗑️ 清空数据</button>
+      </div>
+      <div class="bg-white rounded-lg shadow-md overflow-hidden">
+        <div class="overflow-x-auto max-h-96">
+          <table class="w-full">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-4 py-3 text-left text-sm font-medium">序号</th>
+                <th class="px-4 py-3 text-left text-sm font-medium">时间</th>
+                <th class="px-4 py-3 text-left text-sm font-medium">十进制</th>
+                <th class="px-4 py-3 text-left text-sm font-medium">十六进制</th>
+                <th class="px-4 py-3 text-left text-sm font-medium">二进制</th>
+              </tr>
+            </thead>
+            <tbody id="dataTable" class="divide-y"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- 统计面板 -->
+    <div id="panel-statistics" class="panel hidden">
+      <h2 class="text-lg font-semibold mb-4">📈 统计分析</h2>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white rounded-lg shadow-md p-6">
+          <div class="text-sm text-gray-500 mb-2">总数据量</div>
+          <div id="statTotal" class="text-2xl font-bold text-blue-600">0</div>
+          <div class="text-sm text-gray-500">字节</div>
+        </div>
+        <div class="bg-white rounded-lg shadow-md p-6">
+          <div class="text-sm text-gray-500 mb-2">1 位数量</div>
+          <div id="statOnes" class="text-2xl font-bold text-green-600">0</div>
+          <div class="text-sm text-gray-500">位</div>
+        </div>
+        <div class="bg-white rounded-lg shadow-md p-6">
+          <div class="text-sm text-gray-500 mb-2">0 位数量</div>
+          <div id="statZeros" class="text-2xl font-bold text-gray-600">0</div>
+          <div class="text-sm text-gray-500">位</div>
+        </div>
+        <div class="bg-white rounded-lg shadow-md p-6">
+          <div class="text-sm text-gray-500 mb-2">香农熵</div>
+          <div id="statEntropy" class="text-2xl font-bold text-purple-600">0%</div>
+          <div id="statEntropyStatus" class="text-sm text-gray-500">等待数据</div>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="bg-white rounded-lg shadow-md p-6">
+          <h3 class="text-md font-semibold mb-4">🔵 0/1 位分布</h3>
+          <div class="h-48"><canvas id="pieChart"></canvas></div>
+        </div>
+        <div class="bg-white rounded-lg shadow-md p-6">
+          <h3 class="text-md font-semibold mb-4">📊 各位点分布</h3>
+          <div class="h-48"><canvas id="barChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 设置面板 -->
+    <div id="panel-settings" class="panel hidden">
+      <h2 class="text-lg font-semibold mb-4">⚙️ 设置</h2>
+      <div class="bg-white rounded-lg shadow-md p-6">
+        <div class="space-y-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="font-medium">深色模式</div>
+              <div class="text-sm text-gray-500">切换深色/浅色主题</div>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" class="sr-only peer" onchange="toggleTheme()">
+              <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+            </label>
+          </div>
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="font-medium">自动滚动</div>
+              <div class="text-sm text-gray-500">新数据自动滚动</div>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" class="sr-only peer" checked>
+              <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 导出面板 -->
+    <div id="panel-export" class="panel hidden">
+      <h2 class="text-lg font-semibold mb-4">💾 数据导出</h2>
+      <div class="bg-white rounded-lg shadow-md p-6">
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h3 class="font-semibold">可导出数据</h3>
+            <p class="text-sm text-gray-500">当前缓冲区共有 <span id="exportCount">0</span> 条数据</p>
+          </div>
+          <div id="exportSize" class="text-3xl font-bold text-blue-600">0</div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div onclick="exportData('csv')" class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-500 cursor-pointer">
+            <div class="text-4xl mb-3">📄</div>
+            <h4 class="font-semibold">CSV 格式</h4>
+            <p class="text-sm text-gray-500 mt-2">通用表格格式，可用 Excel 打开</p>
+            <button class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg">导出 CSV</button>
+          </div>
+          <div onclick="exportData('json')" class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-purple-500 cursor-pointer">
+            <div class="text-4xl mb-3">📋</div>
+            <h4 class="font-semibold">JSON 格式</h4>
+            <p class="text-sm text-gray-500 mt-2">结构化数据格式，便于程序处理</p>
+            <button class="mt-4 px-4 py-2 bg-purple-600 text-white rounded-lg">导出 JSON</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- 底部状态栏 -->
+  <footer class="fixed bottom-0 left-0 right-0 bg-white border-t py-2">
+    <div class="max-w-7xl mx-auto px-4 flex justify-between text-sm text-gray-600">
+      <span>熵值: <span id="footerEntropy">0%</span></span>
+      <span>1: <span id="footerOnes">0</span> | 0: <span id="footerZeros">0</span></span>
+      <span>QRngViewer v1.0.0 (Web版)</span>
+    </div>
+  </footer>
+
+  <script>
+    // 全局状态
+    let state = {
+      isConnected: false,
+      isReceiving: false,
+      isFixedMode: false,
+      isFixedPaused: false,
+      fixedTarget: 0,
+      fixedGenerated: 0,
+      dataBuffer: [],
+      statistics: { totalCount: 0, onesCount: 0, zerosCount: 0, entropy: 0 }
+    };
+    let receiveInterval = null;
+    let fixedInterval = null;
+    let waveChart, pieChart, barChart;
+
+    // 更新按钮状态
+    function updateButtonStates() {
+      const startBtn = document.getElementById('startBtn');
+      const fixedBtn = document.getElementById('fixedBtn');
+      
+      if (state.isReceiving) {
+        // 连续接收中：禁用指定输出
+        startBtn.disabled = false;
+        fixedBtn.disabled = true;
+        fixedBtn.classList.add('opacity-50', 'cursor-not-allowed');
+      } else if (state.isFixedMode) {
+        // 指定模式中：禁用开始接收
+        startBtn.disabled = true;
+        startBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        fixedBtn.disabled = false;
+        fixedBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+      } else {
+        // 空闲状态：都可用
+        startBtn.disabled = false;
+        startBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        fixedBtn.disabled = false;
+        fixedBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+      }
+    }
+
+    // 初始化图表
+    function initCharts() {
+      // 波形图
+      waveChart = new Chart(document.getElementById('waveChart'), {
+        type: 'line',
+        data: { labels: [], datasets: [{ label: '随机数值', data: [], borderColor: '#3B82F6', backgroundColor: 'rgba(59,130,246,0.5)', tension: 0.3 }] },
+        options: { responsive: true, maintainAspectRatio: false, animation: { duration: 0 }, scales: { y: { min: 0, max: 255 } } }
+      });
+      // 饼图
+      pieChart = new Chart(document.getElementById('pieChart'), {
+        type: 'doughnut',
+        data: { labels: ['0 位', '1 位'], datasets: [{ data: [0, 0], backgroundColor: ['rgba(156,163,175,0.8)', 'rgba(59,130,246,0.8)'] }] },
+        options: { responsive: true, maintainAspectRatio: false }
+      });
+      // 柱状图
+      barChart = new Chart(document.getElementById('barChart'), {
+        type: 'bar',
+        data: { labels: ['Bit7','Bit6','Bit5','Bit4','Bit3','Bit2','Bit1','Bit0'], datasets: [{ label: '1 的数量', data: Array(8).fill(0), backgroundColor: 'rgba(59,130,246,0.8)' }, { label: '0 的数量', data: Array(8).fill(0), backgroundColor: 'rgba(156,163,175,0.8)' }] },
+        options: { responsive: true, maintainAspectRatio: false }
+      });
+    }
+
+    // 标签页切换
+    function switchTab(tab) {
+      document.querySelectorAll('.panel').forEach(p => p.classList.add('hidden'));
+      document.getElementById('panel-' + tab).classList.remove('hidden');
+      document.querySelectorAll('.tab-btn').forEach(b => {
+        b.classList.remove('border-b-2', 'border-blue-600', 'text-blue-600');
+        b.classList.add('text-gray-600');
+      });
+      const btn = document.querySelector(`[data-tab="${tab}"]`);
+      btn.classList.add('border-b-2', 'border-blue-600', 'text-blue-600');
+      btn.classList.remove('text-gray-600');
+    }
+
+    // 连接/断开
+    function toggleConnect() {
+      const btn = document.getElementById('connectBtn');
+      const status = document.getElementById('connectionStatus');
+      const startBtn = document.getElementById('startBtn');
+      
+      if (!state.isConnected) {
+        state.isConnected = true;
+        btn.textContent = '⏏️ 断开';
+        btn.className = 'flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700';
+        status.textContent = '● 已连接';
+        status.className = 'px-3 py-1 rounded-full text-sm bg-green-100 text-green-800';
+        startBtn.disabled = false;
+        document.getElementById('fixedBtn').disabled = false;
+        updateButtonStates();
+      } else {
+        state.isConnected = false;
+        state.isReceiving = false;
+        clearInterval(receiveInterval);
+        btn.textContent = '🔗 连接';
+        btn.className = 'flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700';
+        status.textContent = '○ 未连接';
+        status.className = 'px-3 py-1 rounded-full text-sm bg-gray-200';
+        startBtn.textContent = '▶️ 开始接收';
+        startBtn.disabled = true;
+        document.getElementById('fixedBtn').disabled = true;
+        // 停止指定模式
+        if (state.isFixedMode) {
+          stopFixedMode();
+        }
+        updateButtonStates();
+      }
+    }
+
+    // 开始/停止接收 (连续模式)
+    function toggleReceive() {
+      const btn = document.getElementById('startBtn');
+      // 停止指定模式
+      if (state.isFixedMode) {
+        stopFixedMode();
+      }
+      if (!state.isReceiving) {
+        state.isReceiving = true;
+        btn.textContent = '⏸️ 暂停';
+        btn.classList.add('receiving');
+        receiveInterval = setInterval(generateData, 100);
+      } else {
+        state.isReceiving = false;
+        btn.textContent = '▶️ 开始接收';
+        btn.classList.remove('receiving');
+        clearInterval(receiveInterval);
+      }
+      updateButtonStates();
+    }
+
+    // 指定字节数输出模式
+    function generateFixedBytes() {
+      const target = parseInt(document.getElementById('targetBytes').value) || 100;
+      
+      // 如果已在指定模式中，点击按钮为暂停/继续
+      if (state.isFixedMode) {
+        if (state.isFixedPaused) {
+          // 继续生成
+          state.isFixedPaused = false;
+          document.getElementById('fixedBtn').textContent = '⏸️ 暂停';
+          document.getElementById('fixedBtn').className = 'px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700';
+          fixedInterval = setInterval(() => {
+            if (state.fixedGenerated >= state.fixedTarget) {
+              stopFixedMode();
+              return;
+            }
+            generateData();
+            state.fixedGenerated++;
+            document.getElementById('fixedCount').textContent = state.fixedGenerated;
+            updateUI();
+          }, 10);
+        } else {
+          // 暂停生成
+          state.isFixedPaused = true;
+          clearInterval(fixedInterval);
+          document.getElementById('fixedBtn').textContent = '▶️ 继续';
+          document.getElementById('fixedBtn').className = 'px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700';
+        }
+        return;
+      }
+      
+      // 首次启动指定模式
+      if (target < 1 || target > 10000) {
+        alert('请输入1-10000之间的字节数');
+        return;
+      }
+      
+      // 停止连续接收模式
+      if (state.isReceiving) {
+        state.isReceiving = false;
+        clearInterval(receiveInterval);
+        document.getElementById('startBtn').textContent = '▶️ 开始接收';
+        document.getElementById('startBtn').classList.remove('receiving');
+      }
+      
+      // 清空之前的数据
+      state.dataBuffer = [];
+      state.statistics = { totalCount: 0, onesCount: 0, zerosCount: 0, entropy: 0 };
+      
+      // 启动指定模式
+      state.isFixedMode = true;
+      state.isFixedPaused = false;
+      state.fixedTarget = target;
+      state.fixedGenerated = 0;
+      
+      // 更新UI
+      document.getElementById('fixedProgress').classList.remove('hidden');
+      document.getElementById('fixedTarget').textContent = target;
+      document.getElementById('fixedCount').textContent = '0';
+      document.getElementById('fixedBtn').textContent = '⏸️ 暂停';
+      document.getElementById('fixedBtn').className = 'px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700';
+      
+      updateButtonStates();
+      
+      // 快速生成 (10ms间隔以加快速度)
+      fixedInterval = setInterval(() => {
+        if (state.fixedGenerated >= state.fixedTarget) {
+          stopFixedMode();
+          return;
+        }
+        generateData();
+        state.fixedGenerated++;
+        document.getElementById('fixedCount').textContent = state.fixedGenerated;
+      }, 10);
+    }
+
+    // 停止指定模式
+    function stopFixedMode() {
+      state.isFixedMode = false;
+      state.isFixedPaused = false;
+      clearInterval(fixedInterval);
+      document.getElementById('fixedProgress').classList.add('hidden');
+      document.getElementById('fixedBtn').textContent = '🎯 指定输出';
+      document.getElementById('fixedBtn').className = 'px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700';
+      updateButtonStates();
+    }
+
+    // 生成模拟数据
+    function generateData() {
+      const value = Math.floor(Math.random() * 256);
+      const binary = value.toString(2).padStart(8, '0');
+      const newData = {
+        timestamp: Date.now(),
+        value,
+        hex: value.toString(16).toUpperCase().padStart(2, '0'),
+        binary
+      };
+      state.dataBuffer.push(newData);
+      if (state.dataBuffer.length > 1000) state.dataBuffer.shift();
+      updateStatistics();
+      updateUI();
+    }
+
+    // 更新统计
+    function updateStatistics() {
+      let ones = 0, zeros = 0;
+      const bitPos = Array(8).fill(0).map(() => ({ ones: 0, zeros: 0 }));
+      state.dataBuffer.forEach(d => {
+        d.binary.split('').forEach((bit, i) => {
+          if (bit === '1') { ones++; bitPos[i].ones++; }
+          else { zeros++; bitPos[i].zeros++; }
+        });
+      });
+      const total = ones + zeros;
+      const entropy = total > 0 ? (ones/total > 0 ? -ones/total*Math.log2(ones/total) : 0) + (zeros/total > 0 ? -zeros/total*Math.log2(zeros/total) : 0) : 0;
+      state.statistics = { totalCount: state.dataBuffer.length, onesCount: ones, zerosCount: zeros, entropy: Math.min(entropy, 1) };
+    }
+
+    // 更新UI
+    function updateUI() {
+      const latest = state.dataBuffer[state.dataBuffer.length - 1];
+      if (!latest) return;
+      
+      document.getElementById('dataCount').textContent = state.dataBuffer.length;
+      document.getElementById('latestValue').textContent = latest.value;
+      document.getElementById('latestHex').textContent = 'HEX: ' + latest.hex;
+      document.getElementById('latestBinary').textContent = latest.binary;
+      document.getElementById('entropyValue').textContent = (state.statistics.entropy * 100).toFixed(1) + '%';
+      document.getElementById('entropyStatus').textContent = state.statistics.entropy > 0.9 ? '✓ 优质' : '⚠ 需检测';
+      document.getElementById('byteCount').textContent = state.dataBuffer.length;
+      
+      // 波形图
+      waveChart.data.labels = state.dataBuffer.slice(-50).map((_, i) => i);
+      waveChart.data.datasets[0].data = state.dataBuffer.slice(-50).map(d => d.value);
+      waveChart.update('none');
+      
+      // 位视图
+      const bitView = document.getElementById('bitView');
+      bitView.innerHTML = state.dataBuffer.slice(-32).map(d => 
+        '<div class="aspect-square flex items-center justify-center"><div class="w-full h-full grid grid-cols-4 gap-0.5">' + 
+        d.binary.split('').map(b => `<div class="rounded-sm ${b === '1' ? 'bg-blue-500' : 'bg-gray-200'}"></div>`).join('') + 
+        '</div></div>'
+      ).join('');
+      
+      // 底部状态
+      document.getElementById('footerEntropy').textContent = (state.statistics.entropy * 100).toFixed(1) + '%';
+      document.getElementById('footerOnes').textContent = state.statistics.onesCount;
+      document.getElementById('footerZeros').textContent = state.statistics.zerosCount;
+      
+      // 统计面板
+      document.getElementById('statTotal').textContent = state.statistics.totalCount;
+      document.getElementById('statOnes').textContent = state.statistics.onesCount;
+      document.getElementById('statZeros').textContent = state.statistics.zerosCount;
+      document.getElementById('statEntropy').textContent = (state.statistics.entropy * 100).toFixed(1) + '%';
+      document.getElementById('statEntropyStatus').textContent = state.statistics.entropy > 0.9 ? '✓ 优秀' : state.statistics.entropy > 0.7 ? '⚠ 良好' : '✗ 不足';
+      
+      pieChart.data.datasets[0].data = [state.statistics.zerosCount, state.statistics.onesCount];
+      pieChart.update('none');
+      
+      // 各位点统计
+      const bitPos = Array(8).fill(0).map(() => ({ ones: 0, zeros: 0 }));
+      state.dataBuffer.forEach(d => d.binary.split('').forEach((b, i) => b === '1' ? bitPos[i].ones++ : bitPos[i].zeros++));
+      barChart.data.datasets[0].data = bitPos.map(b => b.ones);
+      barChart.data.datasets[1].data = bitPos.map(b => b.zeros);
+      barChart.update('none');
+      
+      // 数据表格
+      const table = document.getElementById('dataTable');
+      table.innerHTML = state.dataBuffer.slice(-100).reverse().map((d, i) => 
+        `<tr class="hover:bg-gray-50">
+          <td class="px-4 py-2 text-sm">${state.dataBuffer.length - i}</td>
+          <td class="px-4 py-2 text-sm font-mono">${new Date(d.timestamp).toLocaleTimeString()}</td>
+          <td class="px-4 py-2 text-sm">${d.value}</td>
+          <td class="px-4 py-2 text-sm text-blue-600 font-mono">0x${d.hex}</td>
+          <td class="px-4 py-2 text-sm text-green-600 font-mono">${d.binary}</td>
+        </tr>`
+      ).join('');
+      
+      // 导出面板
+      document.getElementById('exportCount').textContent = state.dataBuffer.length;
+      document.getElementById('exportSize').textContent = state.dataBuffer.length;
+    }
+
+    // 清空数据 (带确认弹框)
+    function clearData() {
+      if (state.dataBuffer.length === 0) {
+        alert('当前没有数据，无需清空');
+        return;
+      }
+      
+      const confirmed = confirm(`确定要清空所有数据吗？\n\n当前数据量: ${state.dataBuffer.length} 条`);
+      
+      if (confirmed) {
+        // 停止所有接收模式
+        if (state.isReceiving) {
+          state.isReceiving = false;
+          clearInterval(receiveInterval);
+          document.getElementById('startBtn').textContent = '▶️ 开始接收';
+          document.getElementById('startBtn').classList.remove('receiving');
+        }
+        if (state.isFixedMode) {
+          stopFixedMode();
+        }
+        
+        // 清空数据
+        state.dataBuffer = [];
+        state.statistics = { totalCount: 0, onesCount: 0, zerosCount: 0, entropy: 0 };
+        
+        // 重置图表
+        waveChart.data.labels = [];
+        waveChart.data.datasets[0].data = [];
+        waveChart.update();
+        pieChart.data.datasets[0].data = [0, 0];
+        pieChart.update();
+        barChart.data.datasets[0].data = Array(8).fill(0);
+        barChart.data.datasets[1].data = Array(8).fill(0);
+        barChart.update();
+        
+        // 更新UI
+        updateUI();
+        updateButtonStates();
+        
+        // 刷新页面
+        location.reload();
+      }
+      // 否认后弹框消失，不做任何操作
+    }
+
+    // 导出数据
+    function exportData(format) {
+      if (state.dataBuffer.length === 0) { alert('暂无数据可导出'); return; }
+      let content, filename, type;
+      if (format === 'csv') {
+        content = 'timestamp,value,hex,binary\n' + state.dataBuffer.map(d => `${d.timestamp},${d.value},${d.hex},${d.binary}`).join('\n');
+        filename = `qrng_data_${Date.now()}.csv`;
+        type = 'text/csv';
+      } else {
+        content = JSON.stringify(state.dataBuffer, null, 2);
+        filename = `qrng_data_${Date.now()}.json`;
+        type = 'application/json';
+      }
+      const blob = new Blob([content], { type });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // 主题切换
+    function toggleTheme() {
+      document.documentElement.classList.toggle('dark');
+    }
+
+    // 初始化
+    initCharts();
+  </script>
+</body>
+</html>
