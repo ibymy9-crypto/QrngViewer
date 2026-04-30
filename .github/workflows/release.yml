@@ -25,7 +25,7 @@ jobs:
             patchelf \
             libudev-dev \
             imagemagick
-        
+      
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -35,25 +35,16 @@ jobs:
       - name: Install npm dependencies
         run: npm install
       
-      - name: Clean and generate new icons
+      - name: Generate RGBA icons
         run: |
-          # 删除可能损坏的图标
-          rm -rf src-tauri/icons
           mkdir -p src-tauri/icons
-          
-          # 使用 ImageMagick 生成 PNG 图标
-          convert -size 512x512 xc:none -fill "#4A90E2" -draw "rectangle 0,0 512,512" \
-            -fill white -gravity center -pointsize 200 -annotate +0+0 "Q" \
-            src-tauri/icons/512x512.png
-          
-          convert src-tauri/icons/512x512.png -resize 32x32 src-tauri/icons/32x32.png
-          convert src-tauri/icons/512x512.png -resize 128x128 src-tauri/icons/128x128.png
-          convert src-tauri/icons/512x512.png -resize 256x256 src-tauri/icons/256x256.png
-          
-          # 验证图标
-          echo "=== Generated Icons ==="
-          file src-tauri/icons/*.png
-          ls -la src-tauri/icons/
+          # 使用 ImageMagick 生成符合 RGBA 规范的图标
+          convert -size 512x512 xc:none -fill "#4A90E2" -draw "rectangle 0,0 512,512" PNG32:src-tauri/icons/512x512.png
+          convert src-tauri/icons/512x512.png -resize 32x32 PNG32:src-tauri/icons/32x32.png
+          convert src-tauri/icons/512x512.png -resize 128x128 PNG32:src-tauri/icons/128x128.png
+          convert src-tauri/icons/512x512.png -resize 256x256 PNG32:src-tauri/icons/256x256.png
+          echo "=== Icons generated ==="
+          file src-tauri/icons/32x32.png
       
       - name: create release
         id: create-release
@@ -73,9 +64,6 @@ jobs:
             args: '--target aarch64-apple-darwin'
           - platform: 'windows-latest'
             args: ''
-          # 暂时禁用 Linux
-          # - platform: 'ubuntu-22.04'
-          #   args: ''
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -95,20 +83,30 @@ jobs:
       - name: Install npm dependencies
         run: npm install
 
-      - name: Generate icons (macOS/Windows)
+      - name: Generate RGBA icons (macOS/Windows)
         run: |
-          rm -rf src-tauri/icons
           mkdir -p src-tauri/icons
+          # macOS 使用 sips，Windows 使用 ImageMagick
+          if [[ "${{ runner.os }}" == "macOS" ]]; then
+            # 创建临时 SVG 并转换
+            cat > icon.svg << 'SVGEOF'
+            <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+              <rect width="512" height="512" rx="100" fill="#4A90E2"/>
+              <text x="256" y="320" font-size="200" text-anchor="middle" fill="white" font-family="Helvetica">Q</text>
+            </svg>
+            SVGEOF
+            qlmanage -t -s 512 -o . icon.svg
+            mv icon.svg.png src-tauri/icons/512x512.png 2>/dev/null || convert icon.svg src-tauri/icons/512x512.png
+          else
+            # Windows/Linux 使用 ImageMagick
+            convert -size 512x512 xc:none -fill "#4A90E2" -draw "rectangle 0,0 512,512" PNG32:src-tauri/icons/512x512.png
+          fi
           
-          # 使用 ImageMagick 生成 PNG 图标
-          convert -size 512x512 xc:none -fill "#4A90E2" -draw "rectangle 0,0 512,512" \
-            -fill white -gravity center -pointsize 200 -annotate +0+0 "Q" \
-            src-tauri/icons/512x512.png
+          convert src-tauri/icons/512x512.png -resize 32x32 PNG32:src-tauri/icons/32x32.png
+          convert src-tauri/icons/512x512.png -resize 128x128 PNG32:src-tauri/icons/128x128.png
           
-          convert src-tauri/icons/512x512.png -resize 32x32 src-tauri/icons/32x32.png
-          convert src-tauri/icons/512x512.png -resize 128x128 src-tauri/icons/128x128.png
-          
-          ls -la src-tauri/icons/
+          echo "=== Icons on ${{ runner.os }} ==="
+          file src-tauri/icons/32x32.png
 
       - uses: tauri-apps/tauri-action@v0
         env:
