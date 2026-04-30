@@ -23,8 +23,7 @@ jobs:
             libappindicator3-dev \
             librsvg2-dev \
             patchelf \
-            libudev-dev \
-            imagemagick
+            libudev-dev
       
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -35,17 +34,22 @@ jobs:
       - name: Install npm dependencies
         run: npm install
       
-      - name: Create RGBA icons
+      - name: Generate RGBA icons using Tauri CLI
         run: |
-          mkdir -p src-tauri/icons
-          # 创建带透明通道的 RGBA PNG 图标
-          convert -size 512x512 xc:none -fill "#4A90E2" -draw "rectangle 0,0 512,512" -fill white -gravity center -pointsize 120 -annotate +0+0 "QRng" src-tauri/icons/512x512.png
-          convert src-tauri/icons/512x512.png -resize 32x32 src-tauri/icons/32x32.png
-          convert src-tauri/icons/512x512.png -resize 128x128 src-tauri/icons/128x128.png
-          convert src-tauri/icons/512x512.png -resize 256x256 src-tauri/icons/256x256.png
-          # 验证图标格式
+          # 创建临时 SVG 图标（Tauri 推荐方式）
+          cat > logo.svg << 'SVGEOF'
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+            <rect width="512" height="512" rx="100" fill="#4A90E2"/>
+            <text x="256" y="320" font-size="200" text-anchor="middle" fill="white" font-family="Arial, sans-serif">Q</text>
+          </svg>
+          SVGEOF
+          
+          # 使用 Tauri CLI 生成图标（确保 RGBA 格式）
+          npx @tauri-apps/cli icon logo.svg -o src-tauri/icons
+          
+          # 验证图标
           file src-tauri/icons/32x32.png
-          identify -verbose src-tauri/icons/32x32.png | grep "Type"
+          ls -la src-tauri/icons/
       
       - name: create release
         id: create-release
@@ -81,8 +85,7 @@ jobs:
             libappindicator3-dev \
             librsvg2-dev \
             patchelf \
-            libudev-dev \
-            imagemagick
+            libudev-dev
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -98,14 +101,19 @@ jobs:
       - name: Install npm dependencies
         run: npm install
 
-      - name: Create RGBA icons for all platforms
+      - name: Generate RGBA icons using Tauri CLI
         run: |
-          mkdir -p src-tauri/icons
-          # 创建带透明通道的 RGBA PNG 图标
-          convert -size 512x512 xc:none -fill "#4A90E2" -draw "rectangle 0,0 512,512" -fill white -gravity center -pointsize 120 -annotate +0+0 "QRng" src-tauri/icons/512x512.png
-          convert src-tauri/icons/512x512.png -resize 32x32 src-tauri/icons/32x32.png
-          convert src-tauri/icons/512x512.png -resize 128x128 src-tauri/icons/128x128.png
-          convert src-tauri/icons/512x512.png -resize 256x256 src-tauri/icons/256x256.png
+          # 创建 SVG 图标
+          cat > logo.svg << 'SVGEOF'
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+            <rect width="512" height="512" rx="100" fill="#4A90E2"/>
+            <text x="256" y="320" font-size="200" text-anchor="middle" fill="white" font-family="Arial, sans-serif">Q</text>
+          </svg>
+          SVGEOF
+          
+          # 生成图标
+          npx @tauri-apps/cli icon logo.svg -o src-tauri/icons
+          
           # 验证图标格式
           echo "=== Icons generated ==="
           ls -la src-tauri/icons/
