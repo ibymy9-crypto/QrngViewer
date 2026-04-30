@@ -1,7 +1,6 @@
 [package]
 name = "qrng-viewer"
 version = "1.0.0"
-description = "跨平台随机数发生器上位机"
 authors = ["QRngViewer"]
 edition = "2021"
 
@@ -14,7 +13,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = [] }
-tauri-plugin-serial = "2"
+tauri-plugin-serialplugin = "2.0.0-rc.4"
 tauri-plugin-fs = "2"
 tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }

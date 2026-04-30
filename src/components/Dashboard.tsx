@@ -1,4 +1,3 @@
-import { useEffect, useRef } from 'react';
 import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -56,12 +55,11 @@ export default function Dashboard({
 }: DashboardProps) {
   const [port, setPort] = useState('COM1');
   const [baudRate, setBaudRate] = useState(115200);
-  const [showPortDialog, setShowPortDialog] = useState(false);
   const [targetBytes, setTargetBytes] = useState(100);
   const [isFixedMode, setIsFixedMode] = useState(false);
   const [isFixedPaused, setIsFixedPaused] = useState(false);
   const [fixedProgress, setFixedProgress] = useState({ current: 0, target: 0 });
-  const fixedIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const fixedIntervalRef = useRef<number | null>(null);
 
   // 判断按钮是否应该禁用
   const isStartDisabled = isFixedMode;

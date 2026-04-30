@@ -1,8 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { SerialPort } from '@tauri-apps/plugin-serial';
 import Dashboard from './components/Dashboard';
-import ConnectionPanel from './components/ConnectionPanel';
+// import ConnectionPanel from './components/ConnectionPanel';
 import DataPanel from './components/DataPanel';
 import SettingsPanel from './components/SettingsPanel';
 import StatisticsPanel from './components/StatisticsPanel';

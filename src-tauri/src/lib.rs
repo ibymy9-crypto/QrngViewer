@@ -54,7 +54,7 @@ pub fn run() {
     log::info!("QRngViewer 启动中...");
     
     tauri::Builder::default()
-        .plugin(tauri_plugin_serial::init())
+        .plugin(tauri_plugin_serialplugin::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![

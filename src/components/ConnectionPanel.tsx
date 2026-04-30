@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { QRngData, ConnectionConfig } from '../App';
+import type { ConnectionConfig } from '../App';
 
 interface ConnectionPanelProps {
   isConnected: boolean;
