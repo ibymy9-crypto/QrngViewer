@@ -34,6 +34,12 @@ jobs:
       - name: Install npm dependencies
         run: npm install
       
+      - name: Generate app icons
+        run: |
+          npx @tauri-apps/cli icon app-icon.png -o src-tauri/icons
+          ls -la src-tauri/icons/
+          file src-tauri/icons/512x512.png
+      
       - name: create release
         id: create-release
         uses: tauri-apps/tauri-action@v0
@@ -83,6 +89,28 @@ jobs:
 
       - name: install dependencies
         run: npm install
+
+      - name: Generate app icons (all platforms)
+        run: |
+          npx @tauri-apps/cli icon app-icon.png -o src-tauri/icons
+          echo "=== Generated icons ==="
+          ls -la src-tauri/icons/
+          
+          # 确保 512x512.png 存在且有效
+          if [ ! -f src-tauri/icons/512x512.png ]; then
+            echo "ERROR: 512x512.png not found!"
+            exit 1
+          fi
+          
+          # 验证 PNG 格式
+          file src-tauri/icons/512x512.png
+          
+          # 如果图标无效，使用 ImageMagick 创建备用图标
+          if ! file src-tauri/icons/512x512.png | grep -q "PNG image"; then
+            echo "Invalid PNG, creating fallback icon..."
+            sudo apt-get install -y imagemagick
+            convert -size 512x512 xc:#4A90E2 src-tauri/icons/512x512.png
+          fi
 
       - uses: tauri-apps/tauri-action@v0
         env:
