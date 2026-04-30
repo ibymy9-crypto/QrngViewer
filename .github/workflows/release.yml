@@ -23,8 +23,9 @@ jobs:
             libappindicator3-dev \
             librsvg2-dev \
             patchelf \
-            libudev-dev
-      
+            libudev-dev \
+            librsvg2-dev
+        
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -34,9 +35,13 @@ jobs:
       - name: Install npm dependencies
         run: npm install
       
-      - name: Generate RGBA icons using Tauri CLI
+      - name: Clean old icons and generate new ones
         run: |
-          # 创建临时 SVG 图标（Tauri 推荐方式）
+          # 删除可能损坏的图标
+          rm -rf src-tauri/icons
+          mkdir -p src-tauri/icons
+          
+          # 创建 SVG 图标
           cat > logo.svg << 'SVGEOF'
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
             <rect width="512" height="512" rx="100" fill="#4A90E2"/>
@@ -44,11 +49,15 @@ jobs:
           </svg>
           SVGEOF
           
-          # 使用 Tauri CLI 生成图标（确保 RGBA 格式）
-          npx @tauri-apps/cli icon logo.svg -o src-tauri/icons
+          # 使用 rsvg-convert 生成 PNG（更可靠）
+          rsvg-convert -w 512 -h 512 logo.svg > src-tauri/icons/512x512.png
+          rsvg-convert -w 32 -h 32 logo.svg > src-tauri/icons/32x32.png
+          rsvg-convert -w 128 -h 128 logo.svg > src-tauri/icons/128x128.png
+          rsvg-convert -w 256 -h 256 logo.svg > src-tauri/icons/256x256.png
           
-          # 验证图标
-          file src-tauri/icons/32x32.png
+          # 验证 PNG 文件
+          echo "=== Generated Icons ==="
+          file src-tauri/icons/*.png
           ls -la src-tauri/icons/
       
       - name: create release
@@ -69,23 +78,12 @@ jobs:
             args: '--target aarch64-apple-darwin'
           - platform: 'windows-latest'
             args: ''
-          - platform: 'ubuntu-22.04'
-            args: ''
+          # - platform: 'ubuntu-22.04'
+          #   args: ''
 
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install dependencies (ubuntu only)
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf \
-            libudev-dev
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -101,8 +99,11 @@ jobs:
       - name: Install npm dependencies
         run: npm install
 
-      - name: Generate RGBA icons using Tauri CLI
+      - name: Clean and regenerate icons for all platforms
         run: |
+          rm -rf src-tauri/icons
+          mkdir -p src-tauri/icons
+          
           # 创建 SVG 图标
           cat > logo.svg << 'SVGEOF'
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
@@ -111,13 +112,17 @@ jobs:
           </svg>
           SVGEOF
           
-          # 生成图标
-          npx @tauri-apps/cli icon logo.svg -o src-tauri/icons
+          # 生成 PNG 图标
+          if command -v rsvg-convert &> /dev/null; then
+            rsvg-convert -w 512 -h 512 logo.svg > src-tauri/icons/512x512.png
+            rsvg-convert -w 32 -h 32 logo.svg > src-tauri/icons/32x32.png
+            rsvg-convert -w 128 -h 128 logo.svg > src-tauri/icons/128x128.png
+          else
+            # macOS 使用 sips
+            sips -z 512 512 logo.svg --out src-tauri/icons/512x512.png 2>/dev/null || echo "Using fallback"
+          fi
           
-          # 验证图标格式
-          echo "=== Icons generated ==="
           ls -la src-tauri/icons/
-          file src-tauri/icons/32x32.png
 
       - uses: tauri-apps/tauri-action@v0
         env:
