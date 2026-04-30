@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Install system dependencies (Ubuntu)
+      - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -35,16 +35,17 @@ jobs:
       - name: Install npm dependencies
         run: npm install
       
-      - name: Generate valid square icon
+      - name: Create RGBA icons
         run: |
-          # 强制生成一个有效的方形 PNG 图标
           mkdir -p src-tauri/icons
-          convert -size 512x512 xc:#4A90E2 -font Ubuntu -pointsize 80 -gravity center -annotate +0+0 "QRng" src-tauri/icons/512x512.png
+          # 创建带透明通道的 RGBA PNG 图标
+          convert -size 512x512 xc:none -fill "#4A90E2" -draw "rectangle 0,0 512,512" -fill white -gravity center -pointsize 120 -annotate +0+0 "QRng" src-tauri/icons/512x512.png
           convert src-tauri/icons/512x512.png -resize 32x32 src-tauri/icons/32x32.png
           convert src-tauri/icons/512x512.png -resize 128x128 src-tauri/icons/128x128.png
           convert src-tauri/icons/512x512.png -resize 256x256 src-tauri/icons/256x256.png
-          file src-tauri/icons/512x512.png
-          ls -la src-tauri/icons/
+          # 验证图标格式
+          file src-tauri/icons/32x32.png
+          identify -verbose src-tauri/icons/32x32.png | grep "Type"
       
       - name: create release
         id: create-release
@@ -71,7 +72,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: install dependencies (ubuntu only)
+      - name: Install dependencies (ubuntu only)
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
@@ -83,37 +84,32 @@ jobs:
             libudev-dev \
             imagemagick
 
-      - name: setup node
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'npm'
 
-      - name: install Rust stable
+      - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin' || '' }}
 
-      - name: install dependencies
+      - name: Install npm dependencies
         run: npm install
 
-      - name: Force create valid square icon for AppImage
-        if: matrix.platform == 'ubuntu-22.04'
+      - name: Create RGBA icons for all platforms
         run: |
-          # 确保图标目录存在
           mkdir -p src-tauri/icons
-          
-          # 使用 ImageMagick 生成有效图标
-          convert -size 512x512 xc:#4A90E2 -font DejaVu-Sans -pointsize 100 -gravity center -annotate +0+0 "QRng" src-tauri/icons/512x512.png
+          # 创建带透明通道的 RGBA PNG 图标
+          convert -size 512x512 xc:none -fill "#4A90E2" -draw "rectangle 0,0 512,512" -fill white -gravity center -pointsize 120 -annotate +0+0 "QRng" src-tauri/icons/512x512.png
           convert src-tauri/icons/512x512.png -resize 32x32 src-tauri/icons/32x32.png
-          convert src-tauri/icons/512x512.png -resize 64x64 src-tauri/icons/64x64.png
           convert src-tauri/icons/512x512.png -resize 128x128 src-tauri/icons/128x128.png
           convert src-tauri/icons/512x512.png -resize 256x256 src-tauri/icons/256x256.png
-          
-          # 验证图标
+          # 验证图标格式
           echo "=== Icons generated ==="
-          ls -la src-tauri/icons/*.png
-          file src-tauri/icons/512x512.png
+          ls -la src-tauri/icons/
+          file src-tauri/icons/32x32.png
 
       - uses: tauri-apps/tauri-action@v0
         env:
