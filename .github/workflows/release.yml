@@ -4,57 +4,22 @@ on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch:
 
 jobs:
-  build-macos:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - name: Install dependencies
-        run: npm install
-      - name: Build macOS app
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          args: --target aarch64-apple-darwin
+  build:
+    strategy:
+      matrix:
+        include:
+          - platform: macos-latest
+            args: --target aarch64-apple-darwin
+          - platform: windows-latest
+            args: ''
+          - platform: ubuntu-22.04
+            args: ''
 
-  build-windows:
-    runs-on: windows-latest
+    runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - name: Install dependencies
-        run: npm install
-      - name: Build Windows app
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          args: ''
-
-  build-linux:
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf \
-            libudev-dev
       
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -64,9 +29,25 @@ jobs:
       - name: Install dependencies
         run: npm install
       
-      - name: Build Linux app
+      - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          args: ''
+          tagName: ${{ github.ref_name }}
+          releaseName: 'QRng Viewer ${{ github.ref_name }}'
+          releaseBody: |
+            ## QRng Viewer ${{ github.ref_name }}
+            
+            ### 支持平台
+            - macOS Apple Silicon - dmg 安装包
+            - Windows 64位 - exe 安装程序
+            - Linux Ubuntu/Debian/麒麟 - deb 安装包
+            
+            ### 安装说明
+            **macOS**: 下载 dmg 文件，拖拽到 Applications 文件夹
+            **Windows**: 运行 exe 文件，按向导安装
+            **Linux**: sudo dpkg -i xxxx.deb
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.args }}
